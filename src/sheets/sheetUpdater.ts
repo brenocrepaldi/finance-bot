@@ -1,5 +1,5 @@
 import { GoogleSheetsService } from './googleSheets';
-import { UpdateRequest, SheetConfig, BotResponse } from '../types';
+import { UpdateRequest, SheetConfig, BotResponse, DayData, PeriodSummary } from '../types';
 import { DateHelper } from '../utils/dateHelper';
 
 /**
@@ -163,4 +163,211 @@ export class SheetUpdater {
       };
     }
   }
+
+  /**
+   * Lê os dados de um dia específico da planilha
+   */
+  async getDayData(day: number, month: number, year: number): Promise<DayData | null> {
+    try {
+      const config = this.getSheetConfig(month, year);
+      const rowNumber = this.getRowNumber(day, config);
+      
+      // Lê as 4 colunas: Entrada, Saída, Diário, Saldo
+      const entradaCol = this.getColumnLetter('entrada', config.columnOffset);
+      const saidaCol = this.getColumnLetter('saida', config.columnOffset);
+      const diarioCol = this.getColumnLetter('diario', config.columnOffset);
+      const saldoCol = this.columnToLetter(5 + config.columnOffset); // Coluna F + offset
+      
+      const [entrada, saida, diario, saldo] = await Promise.all([
+        this.sheetsService.readCell(`${entradaCol}${rowNumber}`),
+        this.sheetsService.readCell(`${saidaCol}${rowNumber}`),
+        this.sheetsService.readCell(`${diarioCol}${rowNumber}`),
+        this.sheetsService.readCell(`${saldoCol}${rowNumber}`)
+      ]);
+
+      return {
+        day,
+        month,
+        year,
+        entrada: this.parseValue(entrada),
+        saida: this.parseValue(saida),
+        diario: this.parseValue(diario),
+        saldo: this.parseValue(saldo)
+      };
+    } catch (error) {
+      console.error('Erro ao ler dados do dia:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Converte valor da planilha (ex: "R$ 87,10") para número
+   */
+  private parseValue(cellValue: string | null): number {
+    if (!cellValue || cellValue.trim() === '') return 0;
+    
+    // Remove "R$", espaços e converte vírgula para ponto
+    const cleaned = cellValue
+      .replace(/R\$\s*/g, '')
+      .replace(/\./g, '') // Remove separadores de milhar
+      .replace(/,/g, '.') // Converte decimal
+      .trim();
+    
+    const value = parseFloat(cleaned);
+    return isNaN(value) ? 0 : value;
+  }
+
+  /**
+   * Formata valor para exibição (ex: 1234.56 → "R$ 1.234,56")
+   */
+  private formatCurrency(value: number): string {
+    return value.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    });
+  }
+
+  /**
+   * Gera mensagem formatada com os dados do dia
+   */
+  async getDayReport(date: Date): Promise<string> {
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+
+    const data = await this.getDayData(day, month, year);
+
+    if (!data) {
+      return '❌ Não foi possível obter os dados deste dia.';
+    }
+
+    const dateStr = DateHelper.formatDate(date);
+    
+    return `
+📊 *RESUMO FINANCEIRO - ${dateStr}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 *ENTRADA:* ${this.formatCurrency(data.entrada)}
+💸 *SAÍDA:* ${this.formatCurrency(data.saida)}
+🍽️ *DIÁRIO:* ${this.formatCurrency(data.diario)}
+
+💵 *SALDO DO DIA:* ${this.formatCurrency(data.saldo)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${this.getSaldoEmoji(data.saldo)} ${this.getSaldoMessage(data.saldo)}
+    `.trim();
+  }
+
+  /**
+   * Retorna emoji baseado no saldo
+   */
+  private getSaldoEmoji(saldo: number): string {
+    if (saldo > 0) return '✅';
+    if (saldo < 0) return '⚠️';
+    return 'ℹ️';
+  }
+
+  /**
+   * Retorna mensagem motivacional baseado no saldo
+   */
+  private getSaldoMessage(saldo: number): string {
+    if (saldo > 0) return 'Saldo positivo! Continue assim! 🎉';
+    if (saldo < 0) return 'Atenção aos gastos! 📉';
+    return 'Saldo zerado.';
+  }
+
+  /**
+   * Gera relatório semanal
+   */
+  async getWeekReport(): Promise<string> {
+    const today = new Date();
+    const days: DayData[] = [];
+    let totalEntradas = 0;
+    let totalSaidas = 0;
+    let totalDiario = 0;
+
+    // Últimos 7 dias
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - i);
+      
+      const dayData = await this.getDayData(
+        date.getDate(),
+        date.getMonth() + 1,
+        date.getFullYear()
+      );
+
+      if (dayData) {
+        days.push(dayData);
+        totalEntradas += dayData.entrada;
+        totalSaidas += dayData.saida;
+        totalDiario += dayData.diario;
+      }
+    }
+
+    const saldoFinal = days.length > 0 ? days[days.length - 1].saldo : 0;
+
+    return `
+📅 *RESUMO SEMANAL (Últimos 7 dias)*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 *Total ENTRADAS:* ${this.formatCurrency(totalEntradas)}
+💸 *Total SAÍDAS:* ${this.formatCurrency(totalSaidas)}
+🍽️ *Total DIÁRIO:* ${this.formatCurrency(totalDiario)}
+
+💵 *SALDO FINAL:* ${this.formatCurrency(saldoFinal)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📈 Média diária: ${this.formatCurrency((totalEntradas + totalSaidas + totalDiario) / 7)}
+    `.trim();
+  }
+
+  /**
+   * Gera relatório mensal
+   */
+  async getMonthReport(): Promise<string> {
+    const today = new Date();
+    const month = today.getMonth() + 1;
+    const year = today.getFullYear();
+    const config = this.getSheetConfig(month, year);
+    
+    let totalEntradas = 0;
+    let totalSaidas = 0;
+    let totalDiario = 0;
+    let diasComDados = 0;
+
+    // Percorre todos os dias do mês até hoje
+    const currentDay = today.getDate();
+    for (let day = 1; day <= currentDay; day++) {
+      const dayData = await this.getDayData(day, month, year);
+      
+      if (dayData && (dayData.entrada > 0 || dayData.saida > 0 || dayData.diario > 0)) {
+        totalEntradas += dayData.entrada;
+        totalSaidas += dayData.saida;
+        totalDiario += dayData.diario;
+        diasComDados++;
+      }
+    }
+
+    const lastDayData = await this.getDayData(currentDay, month, year);
+    const saldoAtual = lastDayData?.saldo || 0;
+
+    const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(today);
+
+    return `
+📆 *RESUMO MENSAL - ${monthName.toUpperCase()}/${year}*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 *Total ENTRADAS:* ${this.formatCurrency(totalEntradas)}
+💸 *Total SAÍDAS:* ${this.formatCurrency(totalSaidas)}
+🍽️ *Total DIÁRIO:* ${this.formatCurrency(totalDiario)}
+
+💵 *SALDO ATUAL:* ${this.formatCurrency(saldoAtual)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Dias com registros: ${diasComDados}/${currentDay}
+📈 Média diária: ${diasComDados > 0 ? this.formatCurrency((totalEntradas + totalSaidas + totalDiario) / diasComDados) : 'N/A'}
+    `.trim();
+  }
 }
+

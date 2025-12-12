@@ -25,6 +25,12 @@ export class MessageHandler {
         return this.getHelpMessage();
       }
 
+      // Se é comando de consulta (saldo/resumo)
+      if (['hoje', 'semana', 'mes'].includes(parsed.type)) {
+        return await this.handleQueryCommand(parsed.type as 'hoje' | 'semana' | 'mes');
+      }
+
+      // Se é comando de atualização (entrada/saída/diário)
       // Extrai informações da data
       const day = DateHelper.getDay(parsed.date);
       const month = DateHelper.getMonth(parsed.date);
@@ -32,8 +38,8 @@ export class MessageHandler {
 
       // Monta requisição de atualização
       const updateRequest: UpdateRequest = {
-        type: parsed.type,
-        value: parsed.value,
+        type: parsed.type as 'entrada' | 'saida' | 'diario',
+        value: parsed.value!,
         day,
         month,
         year
@@ -51,20 +57,39 @@ export class MessageHandler {
   }
 
   /**
+   * Processa comandos de consulta (saldo, resumo)
+   */
+  private async handleQueryCommand(type: 'hoje' | 'semana' | 'mes'): Promise<string> {
+    try {
+      switch (type) {
+        case 'hoje':
+          return await this.sheetUpdater.getDayReport(new Date());
+        case 'semana':
+          return await this.sheetUpdater.getWeekReport();
+        case 'mes':
+          return await this.sheetUpdater.getMonthReport();
+        default:
+          return '❌ Comando de consulta inválido.';
+      }
+    } catch (error) {
+      console.error('Erro ao processar consulta:', error);
+      return `❌ Erro ao buscar dados: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
+    }
+  }
+
+  /**
    * Retorna mensagem de ajuda
    */
   private getHelpMessage(): string {
     return `
 🤖 *Bot de Controle Financeiro*
 
-📝 *Comandos disponíveis:*
+📝 *ADICIONAR VALORES:*
 
 *DIÁRIO:*
 • diario 87,10
 • diario 400 amanha
-• diario 100 07/01
 • 517 (adiciona no diário de hoje)
-• 35 amanha
 
 *ENTRADA:*
 • entrada 352,91 01/01
@@ -74,11 +99,18 @@ export class MessageHandler {
 • saida 94,90 hoje
 • saida 600 06/02
 
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 *CONSULTAR SALDOS:*
+
+• *saldo* ou *resumo* → Resumo de hoje
+• *saldo semana* → Resumo dos últimos 7 dias
+• *saldo mes* → Resumo do mês atual
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
 📅 *Datas aceitas:*
-• hoje
-• amanha
-• dd/mm
-• dd/mm/aaaa
+• hoje • amanha • dd/mm • dd/mm/aaaa
 
 💡 *Dica:* Valores podem usar vírgula ou ponto como decimal.
     `.trim();

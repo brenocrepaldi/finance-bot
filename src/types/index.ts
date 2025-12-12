@@ -3,8 +3,8 @@
  */
 
 export interface ParsedMessage {
-  type: 'entrada' | 'saida' | 'diario';
-  value: number;
+  type: 'entrada' | 'saida' | 'diario' | 'saldo' | 'resumo' | 'hoje' | 'semana' | 'mes';
+  value?: number; // Opcional para comandos de consulta
   date: Date;
   rawText: string;
 }
@@ -42,4 +42,23 @@ export interface BotResponse {
     date: string;
     column: string;
   };
+}
+
+export interface DayData {
+  day: number;
+  month: number;
+  year: number;
+  entrada: number;
+  saida: number;
+  diario: number;
+  saldo: number;
+}
+
+export interface PeriodSummary {
+  periodo: string;
+  totalEntradas: number;
+  totalSaidas: number;
+  totalDiario: number;
+  saldoFinal: number;
+  dias: DayData[];
 }

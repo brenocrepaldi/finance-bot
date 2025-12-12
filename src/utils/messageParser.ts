@@ -28,13 +28,22 @@ export class MessageParser {
   }
 
   /**
-   * Detecta o tipo de operação (entrada, saída ou diário)
+   * Detecta o tipo de operação (entrada, saída, diário ou consulta)
    */
-  private static detectType(text: string): 'entrada' | 'saida' | 'diario' {
+  private static detectType(text: string): 'entrada' | 'saida' | 'diario' | 'saldo' | 'resumo' | 'hoje' | 'semana' | 'mes' {
     const lower = text.toLowerCase();
     
+    // Comandos de consulta (sem valor)
+    if (lower.match(/^(saldo|resumo|extrato)\s*(hoje|hj)?$/)) return 'hoje';
+    if (lower.match(/^(saldo|resumo|extrato)\s*(semana|semanal)$/)) return 'semana';
+    if (lower.match(/^(saldo|resumo|extrato)\s*(mes|mês|mensal)$/)) return 'mes';
+    
+    // Comandos de atualização (com valor)
     if (lower.includes('entrada')) return 'entrada';
     if (lower.includes('saida') || lower.includes('saída')) return 'saida';
+    
+    // Se tem só número, é diário
+    if (/^\d+([,.]\d{1,2})?\s*(hoje|amanha|amanhã|\d{1,2}\/\d{1,2})?$/.test(lower)) return 'diario';
     
     // Padrão: diário
     return 'diario';
@@ -92,12 +101,17 @@ export class MessageParser {
   /**
    * Faz o parse completo da mensagem
    * 
-   * Exemplos:
+   * Exemplos de atualização:
    * - "diario 87,10" → type: diario, value: 87.10, date: hoje
    * - "diario 400 amanha" → type: diario, value: 400, date: amanhã
    * - "517" → type: diario, value: 517, date: hoje
    * - "entrada 352,91 01/01" → type: entrada, value: 352.91, date: 01/01
    * - "saida 94,90 hoje" → type: saida, value: 94.90, date: hoje
+   * 
+   * Exemplos de consulta:
+   * - "saldo" ou "resumo" → type: hoje, value: undefined, date: hoje
+   * - "saldo semana" → type: semana, value: undefined
+   * - "resumo mes" → type: mes, value: undefined
    */
   static parse(message: string): ParsedMessage | null {
     const trimmed = message.trim();
@@ -109,7 +123,16 @@ export class MessageParser {
     // Detecta o tipo
     const type = this.detectType(trimmed);
 
-    // Extrai o valor
+    // Se é comando de consulta, não precisa de valor
+    if (['hoje', 'semana', 'mes'].includes(type)) {
+      return {
+        type: type as 'hoje' | 'semana' | 'mes',
+        date: new Date(),
+        rawText: trimmed
+      };
+    }
+
+    // Para comandos de atualização, extrai o valor
     const value = this.extractValue(trimmed);
     if (value === null || isNaN(value)) {
       return null;
