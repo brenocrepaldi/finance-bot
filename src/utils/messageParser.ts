@@ -33,20 +33,30 @@ export class MessageParser {
   private static detectType(text: string): 'entrada' | 'saida' | 'diario' | 'saldo' | 'resumo' | 'hoje' | 'semana' | 'mes' {
     const lower = text.toLowerCase();
     
+    // Remove "sub" do texto para análise (será tratado separadamente)
+    const cleanText = lower.replace(/^sub\s+/, '');
+    
     // Comandos de consulta (sem valor)
-    if (lower.match(/^(saldo|resumo|extrato)\s*(hoje|hj)?$/)) return 'hoje';
-    if (lower.match(/^(saldo|resumo|extrato)\s*(semana|semanal)$/)) return 'semana';
-    if (lower.match(/^(saldo|resumo|extrato)\s*(mes|mês|mensal)$/)) return 'mes';
+    if (cleanText.match(/^(saldo|resumo|extrato)\s*(hoje|hj)?$/)) return 'hoje';
+    if (cleanText.match(/^(saldo|resumo|extrato)\s*(semana|semanal)$/)) return 'semana';
+    if (cleanText.match(/^(saldo|resumo|extrato)\s*(mes|mês|mensal)$/)) return 'mes';
     
     // Comandos de atualização (com valor)
-    if (lower.includes('entrada')) return 'entrada';
-    if (lower.includes('saida') || lower.includes('saída')) return 'saida';
+    if (cleanText.includes('entrada')) return 'entrada';
+    if (cleanText.includes('saida') || cleanText.includes('saída')) return 'saida';
     
     // Se tem só número, é diário
-    if (/^\d+([,.]\d{1,2})?\s*(hoje|amanha|amanhã|\d{1,2}\/\d{1,2})?$/.test(lower)) return 'diario';
+    if (/^\d+([,.]\d{1,2})?\s*(hoje|amanha|amanhã|\d{1,2}\/\d{1,2})?$/.test(cleanText)) return 'diario';
     
     // Padrão: diário
     return 'diario';
+  }
+
+  /**
+   * Detecta se o comando é de substituição (começa com "sub")
+   */
+  private static shouldReplace(text: string): boolean {
+    return text.toLowerCase().trim().startsWith('sub ');
   }
 
   /**
@@ -101,12 +111,14 @@ export class MessageParser {
   /**
    * Faz o parse completo da mensagem
    * 
-   * Exemplos de atualização:
-   * - "diario 87,10" → type: diario, value: 87.10, date: hoje
-   * - "diario 400 amanha" → type: diario, value: 400, date: amanhã
-   * - "517" → type: diario, value: 517, date: hoje
-   * - "entrada 352,91 01/01" → type: entrada, value: 352.91, date: 01/01
-   * - "saida 94,90 hoje" → type: saida, value: 94.90, date: hoje
+   * Exemplos de atualização (soma):
+   * - "diario 87,10" → type: diario, value: 87.10, date: hoje, shouldReplace: false
+   * - "300 amanha" → type: diario, value: 300, date: amanhã, shouldReplace: false
+   * - "entrada 352,91 01/01" → type: entrada, value: 352.91, date: 01/01, shouldReplace: false
+   * 
+   * Exemplos de substituição:
+   * - "sub 300 hoje" → type: diario, value: 300, date: hoje, shouldReplace: true
+   * - "sub entrada 500" → type: entrada, value: 500, date: hoje, shouldReplace: true
    * 
    * Exemplos de consulta:
    * - "saldo" ou "resumo" → type: hoje, value: undefined, date: hoje
@@ -120,8 +132,14 @@ export class MessageParser {
       return null;
     }
 
+    // Detecta se é comando de substituição
+    const shouldReplace = this.shouldReplace(trimmed);
+
+    // Remove "sub" do texto para processar o resto
+    const cleanMessage = shouldReplace ? trimmed.replace(/^sub\s+/i, '') : trimmed;
+
     // Detecta o tipo
-    const type = this.detectType(trimmed);
+    const type = this.detectType(cleanMessage);
 
     // Se é comando de consulta, não precisa de valor
     if (['hoje', 'semana', 'mes'].includes(type)) {
@@ -133,19 +151,20 @@ export class MessageParser {
     }
 
     // Para comandos de atualização, extrai o valor
-    const value = this.extractValue(trimmed);
+    const value = this.extractValue(cleanMessage);
     if (value === null || isNaN(value)) {
       return null;
     }
 
     // Extrai a data
-    const date = this.extractDate(trimmed);
+    const date = this.extractDate(cleanMessage);
 
     return {
-      type,
+      type: type as 'entrada' | 'saida' | 'diario',
       value,
       date,
-      rawText: trimmed
+      rawText: trimmed,
+      shouldReplace
     };
   }
 

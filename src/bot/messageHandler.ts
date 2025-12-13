@@ -42,7 +42,8 @@ export class MessageHandler {
         value: parsed.value!,
         day,
         month,
-        year
+        year,
+        shouldReplace: parsed.shouldReplace || false
       };
 
       // Atualiza planilha
@@ -84,7 +85,7 @@ export class MessageHandler {
     return `
 🤖 *Bot de Controle Financeiro*
 
-📝 *ADICIONAR VALORES:*
+📝 *ADICIONAR VALORES (soma ao existente):*
 
 *DIÁRIO:*
 • diario 87,10
@@ -101,6 +102,14 @@ export class MessageHandler {
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
+🔄 *SUBSTITUIR VALORES (apaga e substitui):*
+
+• *sub 300 hoje* → Substitui o diário de hoje por 300
+• *sub entrada 500* → Substitui entrada de hoje por 500
+• *sub saida 100 amanha* → Substitui saída de amanhã por 100
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
 📊 *CONSULTAR SALDOS:*
 
 • *saldo* ou *resumo* → Resumo de hoje
@@ -112,7 +121,10 @@ export class MessageHandler {
 📅 *Datas aceitas:*
 • hoje • amanha • dd/mm • dd/mm/aaaa
 
-💡 *Dica:* Valores podem usar vírgula ou ponto como decimal.
+💡 *Dicas:*
+- Valores podem usar vírgula ou ponto como decimal
+- Sem "sub", os valores SÃO SOMADOS ao existente
+- Com "sub", o valor É SUBSTITUÍDO
     `.trim();
   }
 

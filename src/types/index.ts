@@ -7,6 +7,7 @@ export interface ParsedMessage {
   value?: number; // Opcional para comandos de consulta
   date: Date;
   rawText: string;
+  shouldReplace?: boolean; // true para substituir, false (padrão) para somar
 }
 
 export interface SheetConfig {
@@ -31,6 +32,7 @@ export interface UpdateRequest {
   day: number;
   month: number;
   year: number;
+  shouldReplace?: boolean; // true para substituir, false (padrão) para somar
 }
 
 export interface BotResponse {

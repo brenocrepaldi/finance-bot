@@ -4,11 +4,24 @@
 
 export class DateHelper {
   /**
+   * Retorna a data/hora atual no horário de Brasília (GMT-3)
+   */
+  static getBrasiliaTime(): Date {
+    const now = new Date();
+    // Converte para horário de Brasília (UTC-3)
+    const brasiliaOffset = -3 * 60; // -3 horas em minutos
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const brasiliaTime = new Date(utcTime + (brasiliaOffset * 60000));
+    return brasiliaTime;
+  }
+
+  /**
    * Interpreta texto de data e retorna um objeto Date
    * Aceita: "hoje", "amanha", "dd/mm", "dd/mm/aaaa"
+   * Usa horário de Brasília
    */
   static parseDate(dateText: string): Date {
-    const now = new Date();
+    const now = this.getBrasiliaTime();
     const normalized = dateText.toLowerCase().trim();
 
     // Caso: "hoje"

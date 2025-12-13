@@ -103,7 +103,7 @@ export class SheetUpdater {
    */
   async updateValue(request: UpdateRequest): Promise<BotResponse> {
     try {
-      const { type, value, day, month, year } = request;
+      const { type, value, day, month, year, shouldReplace = false } = request;
 
       // Validações
       if (day < 1 || day > 31) {
@@ -130,8 +130,18 @@ export class SheetUpdater {
       const rowNumber = this.getRowNumber(day, config);
       const cellRange = `${columnLetter}${rowNumber}`;
 
+      // Determina o valor final
+      let finalValue = value;
+      
+      if (!shouldReplace) {
+        // Se não for substituição, soma com o valor existente
+        const currentCellValue = await this.sheetsService.readCell(cellRange);
+        const currentValue = this.parseValue(currentCellValue);
+        finalValue = currentValue + value;
+      }
+
       // Formata valor em formato brasileiro
-      const formattedValue = `R$ ${value.toFixed(2).replace('.', ',')}`;
+      const formattedValue = `R$ ${finalValue.toFixed(2).replace('.', ',')}`;
 
       // Escreve na célula
       await this.sheetsService.writeCell(cellRange, formattedValue);
@@ -144,9 +154,14 @@ export class SheetUpdater {
         diario: 'Diário'
       }[type];
 
+      const action = shouldReplace ? 'substituído para' : 'adicionado';
+      const valueFormatted = `R$ ${value.toFixed(2).replace('.', ',')}`;
+      
       return {
         success: true,
-        message: `✅ ${typeLabel} de ${formattedValue} registrado para ${dateStr}`,
+        message: shouldReplace 
+          ? `✅ ${typeLabel} ${action} ${formattedValue} em ${dateStr}`
+          : `✅ ${typeLabel} de ${valueFormatted} ${action} em ${dateStr} (Total: ${formattedValue})`,
         details: {
           type: typeLabel,
           value: formattedValue,
