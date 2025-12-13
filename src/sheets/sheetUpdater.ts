@@ -181,33 +181,42 @@ export class SheetUpdater {
 
   /**
    * Lê os dados de um dia específico da planilha
+   * OTIMIZADO: Usa batch read para reduzir requisições
    */
   async getDayData(day: number, month: number, year: number): Promise<DayData | null> {
     try {
       const config = this.getSheetConfig(month, year);
       const rowNumber = this.getRowNumber(day, config);
       
-      // Lê as 4 colunas: Entrada, Saída, Diário, Saldo
+      // Lê as 4 colunas em uma única requisição usando range
       const entradaCol = this.getColumnLetter('entrada', config.columnOffset);
-      const saidaCol = this.getColumnLetter('saida', config.columnOffset);
-      const diarioCol = this.getColumnLetter('diario', config.columnOffset);
-      const saldoCol = this.columnToLetter(5 + config.columnOffset); // Coluna F + offset
+      const saldoCol = this.columnToLetter(5 + config.columnOffset);
+      const range = `${entradaCol}${rowNumber}:${saldoCol}${rowNumber}`;
       
-      const [entrada, saida, diario, saldo] = await Promise.all([
-        this.sheetsService.readCell(`${entradaCol}${rowNumber}`),
-        this.sheetsService.readCell(`${saidaCol}${rowNumber}`),
-        this.sheetsService.readCell(`${diarioCol}${rowNumber}`),
-        this.sheetsService.readCell(`${saldoCol}${rowNumber}`)
-      ]);
+      const values = await this.sheetsService.readRange(range);
+      
+      if (!values || values.length === 0) {
+        return {
+          day,
+          month,
+          year,
+          entrada: 0,
+          saida: 0,
+          diario: 0,
+          saldo: 0
+        };
+      }
+
+      const [entrada, saida, diario, , saldo] = values[0]; // 4 colunas: C, D, E, F (F é saldo)
 
       return {
         day,
         month,
         year,
-        entrada: this.parseValue(entrada),
-        saida: this.parseValue(saida),
-        diario: this.parseValue(diario),
-        saldo: this.parseValue(saldo)
+        entrada: this.parseValue(entrada || null),
+        saida: this.parseValue(saida || null),
+        diario: this.parseValue(diario || null),
+        saldo: this.parseValue(saldo || null)
       };
     } catch (error) {
       console.error('Erro ao ler dados do dia:', error);
@@ -387,47 +396,67 @@ ${this.getSaldoEmoji(data.saldo)} ${this.getSaldoMessage(data.saldo)}
 
   /**
    * Lê os totais mensais da planilha (linha 40 e 43)
+   * OTIMIZADO: Usa batch read para reduzir requisições
    */
   async getMonthTotals(month: number, year: number): Promise<MonthSummary | null> {
     try {
       const config = this.getSheetConfig(month, year);
       
-      // Colunas dos totais (linha 40)
-      const entradaCol = this.columnToLetter(2 + config.columnOffset); // Coluna C + offset
-      const saidaCol = this.columnToLetter(3 + config.columnOffset);   // Coluna D + offset
-      const diarioCol = this.columnToLetter(4 + config.columnOffset);  // Coluna E + offset
+      // Colunas dos totais
+      const entradaCol = this.columnToLetter(2 + config.columnOffset);
+      const saidaCol = this.columnToLetter(3 + config.columnOffset);
+      const diarioCol = this.columnToLetter(4 + config.columnOffset);
+      const saidaTotalCol = this.columnToLetter(1 + config.columnOffset);
+      const performanceCol = this.columnToLetter(4 + config.columnOffset);
       
-      // Colunas da linha 43 (Saída Total e Performance)
-      const saidaTotalCol = this.columnToLetter(1 + config.columnOffset); // Coluna B + offset
-      const performanceCol = this.columnToLetter(4 + config.columnOffset); // Coluna E + offset
+      // Usa batch read para ler todas as 5 células de uma vez
+      const ranges = [
+        `${entradaCol}40`,
+        `${saidaCol}40`,
+        `${diarioCol}40`,
+        `${saidaTotalCol}43`,
+        `${performanceCol}43`
+      ];
       
-      // Lê todas as células em paralelo
-      const [entradas, saidas, diario, saidaTotal, performance] = await Promise.all([
-        this.sheetsService.readCell(`${entradaCol}40`),
-        this.sheetsService.readCell(`${saidaCol}40`),
-        this.sheetsService.readCell(`${diarioCol}40`),
-        this.sheetsService.readCell(`${saidaTotalCol}43`),
-        this.sheetsService.readCell(`${performanceCol}43`)
-      ]);
+      const results = await this.sheetsService.batchRead(ranges);
 
-      // Conta dias com dados
+      // Conta dias com dados (lendo range completo de uma vez)
       let diasComDados = 0;
       const today = DateHelper.getBrasiliaTime();
       const isCurrentMonth = month === today.getMonth() + 1 && year === today.getFullYear();
       const maxDay = isCurrentMonth ? today.getDate() : config.endRow - config.startRow + 1;
       
-      for (let day = 1; day <= maxDay; day++) {
-        const dayData = await this.getDayData(day, month, year);
-        if (dayData && (dayData.entrada > 0 || dayData.saida > 0 || dayData.diario > 0)) {
-          diasComDados++;
-        }
+      // Lê todos os dias de uma vez usando um range
+      const startRow = config.startRow;
+      const endRow = config.startRow + maxDay - 1;
+      const startCol = this.getColumnLetter('entrada', config.columnOffset);
+      const endCol = this.columnToLetter(5 + config.columnOffset);
+      const daysRange = `${startCol}${startRow}:${endCol}${endRow}`;
+      
+      try {
+        const daysData = await this.sheetsService.readRange(daysRange);
+        
+        daysData.forEach(row => {
+          if (row && row.length >= 3) {
+            const entrada = this.parseValue(row[0] || null);
+            const saida = this.parseValue(row[1] || null);
+            const diario = this.parseValue(row[2] || null);
+            
+            if (entrada > 0 || saida > 0 || diario > 0) {
+              diasComDados++;
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Erro ao contar dias com dados:', error);
+        // Se falhar, mantém diasComDados = 0
       }
 
-      const totalEntradas = this.parseValue(entradas);
-      const totalSaidas = this.parseValue(saidas);
-      const totalDiario = this.parseValue(diario);
-      const totalSaidaTotal = this.parseValue(saidaTotal);
-      const performanceValue = this.parseValue(performance);
+      const totalEntradas = this.parseValue(results.get(ranges[0]) || null);
+      const totalSaidas = this.parseValue(results.get(ranges[1]) || null);
+      const totalDiario = this.parseValue(results.get(ranges[2]) || null);
+      const totalSaidaTotal = this.parseValue(results.get(ranges[3]) || null);
+      const performanceValue = this.parseValue(results.get(ranges[4]) || null);
       
       const mediaDiaria = diasComDados > 0 
         ? (totalEntradas + totalSaidas + totalDiario) / diasComDados 

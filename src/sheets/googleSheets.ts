@@ -105,4 +105,35 @@ export class GoogleSheetsService {
       throw error;
     }
   }
+
+  /**
+   * Lê múltiplas células/ranges de uma vez (batch read)
+   * Reduz drasticamente o número de requisições à API
+   */
+  async batchRead(ranges: string[]): Promise<Map<string, string | null>> {
+    try {
+      const response = await this.sheets.spreadsheets.values.batchGet({
+        spreadsheetId: this.spreadsheetId,
+        ranges: ranges,
+      });
+
+      const result = new Map<string, string | null>();
+      
+      response.data.valueRanges?.forEach((valueRange, index) => {
+        const range = ranges[index];
+        const values = valueRange.values;
+        
+        if (values && values.length > 0 && values[0].length > 0) {
+          result.set(range, values[0][0]);
+        } else {
+          result.set(range, null);
+        }
+      });
+
+      return result;
+    } catch (error) {
+      console.error('Erro ao ler células em batch:', error);
+      throw error;
+    }
+  }
 }
