@@ -102,7 +102,13 @@ io.on('connection', (socket) => {
       
       socket.emit('bot-message', {
         id: Date.now().toString(),
-        text: '❌ Erro ao processar sua mensagem. Tente novamente.',
+        text: `⚠️ Ops! Algo deu errado.
+
+Não consegui processar sua
+mensagem.
+
+💡 Digite "ajuda" para ver
+   os comandos disponíveis.`,
         sender: 'bot',
         timestamp: new Date().toISOString()
       });

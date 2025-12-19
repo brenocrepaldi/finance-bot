@@ -109,7 +109,11 @@ export class SheetUpdater {
       if (day < 1 || day > 31) {
         return {
           success: false,
-          message: `Dia inválido: ${day}`
+          message: `⚠️ Data inválida!
+
+Dia ${day} não existe.
+
+💡 Use datas entre 1 e 31`
         };
       }
 
@@ -121,7 +125,12 @@ export class SheetUpdater {
       if (day > maxDay) {
         return {
           success: false,
-          message: `O mês ${month}/${year} só tem ${maxDay} dias`
+          message: `⚠️ Data inválida!
+
+${month}/${year} tem apenas
+${maxDay} dias.
+
+💡 Use uma data válida`
         };
       }
 
@@ -149,9 +158,15 @@ export class SheetUpdater {
       // Monta mensagem de sucesso
       const dateStr = DateHelper.formatDate(new Date(year, month - 1, day));
       const typeLabel = {
-        entrada: 'Entrada',
-        saida: 'Saída',
-        diario: 'Diário'
+        entrada: '💰 Entrada',
+        saida: '💸 Saída',
+        diario: '🍽️ Diário'
+      }[type];
+
+      const typeEmoji = {
+        entrada: '💰',
+        saida: '💸',
+        diario: '🍽️'
       }[type];
 
       const action = shouldReplace ? 'substituído para' : 'adicionado';
@@ -160,8 +175,19 @@ export class SheetUpdater {
       return {
         success: true,
         message: shouldReplace 
-          ? `✅ ${typeLabel} ${action} ${formattedValue} em ${dateStr}`
-          : `✅ ${typeLabel} de ${valueFormatted} ${action} em ${dateStr} (Total: ${formattedValue})`,
+          ? `✅ Valor atualizado!
+
+${typeEmoji} ${type.charAt(0).toUpperCase() + type.slice(1)}
+   ${formattedValue}
+
+📅 Data: ${dateStr}`
+          : `✅ Valor adicionado!
+
+${typeEmoji} ${type.charAt(0).toUpperCase() + type.slice(1)}
+   + ${valueFormatted}
+
+📅 Data: ${dateStr}
+💵 Total: ${formattedValue}`,
         details: {
           type: typeLabel,
           value: formattedValue,
@@ -174,7 +200,13 @@ export class SheetUpdater {
       console.error('Erro ao atualizar planilha:', error);
       return {
         success: false,
-        message: `❌ Erro ao salvar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+        message: `⚠️ Erro ao salvar!
+
+Não consegui registrar o
+valor na planilha.
+
+💡 Tente novamente em alguns
+   instantes.`
       };
     }
   }
@@ -262,23 +294,39 @@ export class SheetUpdater {
     const data = await this.getDayData(day, month, year);
 
     if (!data) {
-      return '❌ Não foi possível obter os dados deste dia.';
+      return `⚠️ Dados indisponíveis
+
+Não consegui buscar as
+informações deste dia.
+
+💡 Tente novamente mais tarde.`;
     }
 
     const dateStr = DateHelper.formatDate(date);
+    const saldoIcon = this.getSaldoEmoji(data.saldo);
+    const saldoMsg = this.getSaldoMessage(data.saldo);
     
     return `
-📊 *RESUMO FINANCEIRO - ${dateStr}*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌──────────────────────┐
+  📊 RESUMO DO DIA     
+  ${dateStr}           
+└──────────────────────┘
 
-💰 *ENTRADA:* ${this.formatCurrency(data.entrada)}
-💸 *SAÍDA:* ${this.formatCurrency(data.saida)}
-🍽️ *DIÁRIO:* ${this.formatCurrency(data.diario)}
+💰 Entrada
+   ${this.formatCurrency(data.entrada)}
 
-💵 *SALDO DO DIA:* ${this.formatCurrency(data.saldo)}
+💸 Saída
+   ${this.formatCurrency(data.saida)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${this.getSaldoEmoji(data.saldo)} ${this.getSaldoMessage(data.saldo)}
+🍽️ Diário
+   ${this.formatCurrency(data.diario)}
+
+━━━━━━━━━━━━━━━━━━━━━
+
+${saldoIcon} SALDO
+   ${this.formatCurrency(data.saldo)}
+
+${saldoMsg}
     `.trim();
   }
 
@@ -330,19 +378,30 @@ ${this.getSaldoEmoji(data.saldo)} ${this.getSaldoMessage(data.saldo)}
     }
 
     const saldoFinal = days.length > 0 ? days[days.length - 1].saldo : 0;
+    const mediaDiaria = (totalEntradas + totalSaidas + totalDiario) / 7;
 
     return `
-📅 *RESUMO SEMANAL (Últimos 7 dias)*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌──────────────────────────┐
+  📅 RESUMO SEMANAL        
+  Últimos 7 dias           
+└──────────────────────────┘
 
-💰 *Total ENTRADAS:* ${this.formatCurrency(totalEntradas)}
-💸 *Total SAÍDAS:* ${this.formatCurrency(totalSaidas)}
-🍽️ *Total DIÁRIO:* ${this.formatCurrency(totalDiario)}
+💰 Total de Entradas
+   ${this.formatCurrency(totalEntradas)}
 
-💵 *SALDO FINAL:* ${this.formatCurrency(saldoFinal)}
+💸 Total de Saídas
+   ${this.formatCurrency(totalSaidas)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📈 Média diária: ${this.formatCurrency((totalEntradas + totalSaidas + totalDiario) / 7)}
+🍽️ Total de Diário
+   ${this.formatCurrency(totalDiario)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+💵 SALDO FINAL
+   ${this.formatCurrency(saldoFinal)}
+
+📊 Média Diária
+   ${this.formatCurrency(mediaDiaria)}
     `.trim();
   }
 
@@ -490,7 +549,12 @@ ${this.getSaldoEmoji(data.saldo)} ${this.getSaldoMessage(data.saldo)}
     const summary = await this.getMonthTotals(targetMonth, targetYear);
 
     if (!summary) {
-      return '❌ Não foi possível obter os dados do mês.';
+      return `⚠️ Dados indisponíveis
+
+Não consegui buscar as
+informações deste mês.
+
+💡 Tente novamente mais tarde.`;
     }
 
     const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(
@@ -498,29 +562,44 @@ ${this.getSaldoEmoji(data.saldo)} ${this.getSaldoMessage(data.saldo)}
     );
 
     const performanceEmoji = summary.performance >= 0 ? '📈' : '📉';
-    const performanceText = summary.performance >= 0 
-      ? `Saldo POSITIVO! Você economizou! 🎉` 
-      : `Saldo NEGATIVO! Gastos superaram entradas ⚠️`;
+    const isPositive = summary.performance >= 0;
 
     return `
-📆 *RESUMO COMPLETO - ${monthName.toUpperCase()}/${targetYear}*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌───────────────────────────┐
+  📆 RESUMO MENSAL          
+  ${monthName.toUpperCase()}/${targetYear}${' '.repeat(Math.max(0, 15 - monthName.length - targetYear.toString().length))}│
+└───────────────────────────┘
 
-💰 *ENTRADAS:* ${this.formatCurrency(summary.totalEntradas)}
-💸 *SAÍDAS:* ${this.formatCurrency(summary.totalSaidas)}
-🍽️ *DIÁRIO:* ${this.formatCurrency(summary.totalDiario)}
+💰 Entradas
+   ${this.formatCurrency(summary.totalEntradas)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💸 Saídas
+   ${this.formatCurrency(summary.totalSaidas)}
 
-🔻 *SAÍDA TOTAL:* ${this.formatCurrency(summary.saidaTotal)}
+🍽️ Diário
+   ${this.formatCurrency(summary.totalDiario)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔻 Saída Total
+   ${this.formatCurrency(summary.saidaTotal)}
    (Saídas + Diário)
 
-${performanceEmoji} *PERFORMANCE:* ${this.formatCurrency(summary.performance)}
-   ${performanceText}
+${performanceEmoji} Performance
+   ${this.formatCurrency(summary.performance)}
+   ${isPositive ? '✅ Saldo positivo!' : '⚠️ Saldo negativo'}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Dias com registros: ${summary.diasComDados}
-📈 Média diária: ${this.formatCurrency(summary.mediaDiaria)}
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 Dias c/ registros
+   ${summary.diasComDados} dias
+
+📈 Média diária
+   ${this.formatCurrency(summary.mediaDiaria)}
+
+${isPositive 
+  ? '✨ Parabéns! Você economizou! 🎉'
+  : '⚠️ Gastos superaram as entradas'}
     `.trim();
   }
 
@@ -532,30 +611,50 @@ ${performanceEmoji} *PERFORMANCE:* ${this.formatCurrency(summary.performance)}
     const summary = await this.getMonthTotals(today.getMonth() + 1, today.getFullYear());
 
     if (!summary) {
-      return '❌ Não foi possível calcular a performance.';
+      return `⚠️ Dados indisponíveis
+
+Não consegui calcular a
+performance do mês.
+
+💡 Tente novamente mais tarde.`;
     }
 
     const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(today);
-    const performanceEmoji = summary.performance >= 0 ? '✅' : '⚠️';
+    const performanceEmoji = summary.performance >= 0 ? '📈' : '📉';
     const percentage = summary.totalEntradas > 0 
       ? ((summary.performance / summary.totalEntradas) * 100).toFixed(1)
       : '0';
+    
+    const isPositive = summary.performance >= 0;
 
     return `
-${performanceEmoji} *PERFORMANCE - ${monthName.toUpperCase()}*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌───────────────────────────┐
+ ${performanceEmoji} PERFORMANCE          
+ ${monthName.toUpperCase()}${' '.repeat(Math.max(0, 18 - monthName.length))}
+└───────────────────────────┘
 
-💰 Entradas: ${this.formatCurrency(summary.totalEntradas)}
-🔻 Saída Total: ${this.formatCurrency(summary.saidaTotal)}
+💰 Entradas
+   ${this.formatCurrency(summary.totalEntradas)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔻 Saída Total
+   ${this.formatCurrency(summary.saidaTotal)}
+   (Saídas + Diário)
 
-📊 *RESULTADO:* ${this.formatCurrency(summary.performance)}
-📈 *Percentual:* ${percentage}%
+━━━━━━━━━━━━━━━━━━━━━━━━
 
-${summary.performance >= 0 
-  ? `✅ Você está economizando! Continue assim! 🎉`
-  : `⚠️ Seus gastos superaram as entradas em ${this.formatCurrency(Math.abs(summary.performance))}`}
+${isPositive ? '✅' : '⚠️'} RESULTADO
+   ${this.formatCurrency(summary.performance)}
+
+📊 Percentual
+   ${percentage}% ${isPositive ? 'de economia' : 'de déficit'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+${isPositive 
+  ? `✨ Você está economizando!
+Continue com esse ritmo! 🎉`
+  : `⚠️ Atenção aos gastos!
+Déficit de ${this.formatCurrency(Math.abs(summary.performance))}`}
     `.trim();
   }
 
@@ -581,13 +680,18 @@ ${summary.performance >= 0
     ]);
 
     if (!current || !previous) {
-      return '❌ Não foi possível comparar os meses.';
+      return `⚠️ Dados indisponíveis
+
+Não consegui buscar as
+informações para comparação.
+
+💡 Tente novamente mais tarde.`;
     }
 
-    const currentMonthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(
+    const currentMonthName = new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(
       new Date(currentYear, currentMonth - 1, 1)
     );
-    const previousMonthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(
+    const previousMonthName = new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(
       new Date(previousYear, previousMonth - 1, 1)
     );
 
@@ -596,27 +700,50 @@ ${summary.performance >= 0
     const diffPerformance = current.performance - previous.performance;
 
     const getArrow = (diff: number) => diff > 0 ? '📈' : diff < 0 ? '📉' : '➡️';
+    const getVariation = (diff: number) => diff >= 0 ? 'a mais' : 'a menos';
 
     return `
-📊 *COMPARAÇÃO DE MESES*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌──────────────────────────┐
+  📊 COMPARAÇÃO MENSAL      
+└──────────────────────────┘
 
 ${currentMonthName.toUpperCase()} vs ${previousMonthName.toUpperCase()}
 
-💰 *ENTRADAS:*
+╔══════════════════════════╗
+       💰 ENTRADAS             
+╚══════════════════════════╝
+
 ${currentMonthName}: ${this.formatCurrency(current.totalEntradas)}
 ${previousMonthName}: ${this.formatCurrency(previous.totalEntradas)}
-${getArrow(diffEntradas)} Diferença: ${this.formatCurrency(Math.abs(diffEntradas))} ${diffEntradas >= 0 ? 'a mais' : 'a menos'}
 
-🔻 *SAÍDA TOTAL:*
+${getArrow(diffEntradas)} Variação
+   ${this.formatCurrency(Math.abs(diffEntradas))} ${getVariation(diffEntradas)}
+
+
+╔══════════════════════════╗
+      🔻 SAÍDA TOTAL          
+╚══════════════════════════╝
+
 ${currentMonthName}: ${this.formatCurrency(current.saidaTotal)}
 ${previousMonthName}: ${this.formatCurrency(previous.saidaTotal)}
-${getArrow(diffSaidas)} Diferença: ${this.formatCurrency(Math.abs(diffSaidas))} ${diffSaidas >= 0 ? 'a mais' : 'a menos'}
 
-${getArrow(diffPerformance)} *PERFORMANCE:*
+${getArrow(diffSaidas)} Variação
+   ${this.formatCurrency(Math.abs(diffSaidas))} ${getVariation(diffSaidas)}
+
+
+╔══════════════════════════╗
+      📈 PERFORMANCE          
+╚══════════════════════════╝
+
 ${currentMonthName}: ${this.formatCurrency(current.performance)}
 ${previousMonthName}: ${this.formatCurrency(previous.performance)}
-Diferença: ${this.formatCurrency(Math.abs(diffPerformance))} ${diffPerformance >= 0 ? 'melhor' : 'pior'}
+
+${getArrow(diffPerformance)} Diferença
+   ${this.formatCurrency(Math.abs(diffPerformance))} ${diffPerformance >= 0 ? 'melhor' : 'pior'}
+   
+${diffPerformance >= 0 
+  ? '✅ Performance melhorou! 🎉' 
+  : '⚠️ Performance piorou'}
     `.trim();
   }
 
@@ -635,7 +762,14 @@ Diferença: ${this.formatCurrency(Math.abs(diffPerformance))} ${diffPerformance 
     const summary = await this.getMonthTotals(month, year);
 
     if (!summary || summary.diasComDados === 0) {
-      return '❌ Não há dados suficientes para fazer previsão.';
+      return `⚠️ Dados insuficientes
+
+Preciso de mais registros
+para fazer a previsão.
+
+💡 Adicione valores de
+   entradas e saídas para
+   gerar a projeção.`;
     }
 
     // Média diária de saídas (saídas + diário)
@@ -650,36 +784,73 @@ Diferença: ${this.formatCurrency(Math.abs(diffPerformance))} ${diffPerformance 
     const projecaoPerformance = summary.totalEntradas - projecaoSaidaTotal;
 
     const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(today);
-    const performanceEmoji = projecaoPerformance >= 0 ? '✅' : '⚠️';
+    const isPositive = projecaoPerformance >= 0;
 
     return `
-🔮 *PREVISÃO DE FIM DE MÊS - ${monthName.toUpperCase()}*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌──────────────────────────┐
+  🔮 PREVISÃO FIM DE MÊS   
+  ${monthName.toUpperCase()}${' '.repeat(Math.max(0, 18 - monthName.length))}
+└──────────────────────────┘
 
-📅 Dia atual: ${currentDay}/${daysInMonth}
-⏳ Dias restantes: ${daysRemaining}
+📅 Progresso
+   Dia ${currentDay} de ${daysInMonth}
+   
+⏳ Faltam
+   ${daysRemaining} dias
 
-📊 *MÉDIAS DIÁRIAS:*
-💸 Saídas: ${this.formatCurrency(mediaSaidas)}/dia
-🍽️ Diário: ${this.formatCurrency(mediaDiario)}/dia
-🔻 Total: ${this.formatCurrency(mediaSaidaTotal)}/dia
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+╔══════════════════════════╗
+    📊 MÉDIAS DIÁRIAS       
+╚══════════════════════════╝
 
-🎯 *PROJEÇÃO PARA FIM DO MÊS:*
+💸 Saídas
+   ${this.formatCurrency(mediaSaidas)}/dia
 
-💰 Entradas: ${this.formatCurrency(summary.totalEntradas)} (fixo)
-💸 Saídas: ${this.formatCurrency(projecaoSaidas)}
-🍽️ Diário: ${this.formatCurrency(projecaoDiario)}
-🔻 Saída Total: ${this.formatCurrency(projecaoSaidaTotal)}
+🍽️ Diário
+   ${this.formatCurrency(mediaDiario)}/dia
 
-${performanceEmoji} *Performance Prevista:* ${this.formatCurrency(projecaoPerformance)}
+🔻 Total
+   ${this.formatCurrency(mediaSaidaTotal)}/dia
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-${projecaoPerformance >= 0 
-  ? `✅ Se manter esse ritmo, vai fechar o mês com saldo POSITIVO! 🎉`
-  : `⚠️ ATENÇÃO! Mantendo esse ritmo, o mês fecha NEGATIVO em ${this.formatCurrency(Math.abs(projecaoPerformance))}`}
+╔══════════════════════════╗
+   🎯 PROJEÇÃO FIM DO MÊS  
+╚══════════════════════════╝
+
+💰 Entradas
+   ${this.formatCurrency(summary.totalEntradas)}
+   (valor fixo)
+
+💸 Saídas
+   ${this.formatCurrency(projecaoSaidas)}
+
+🍽️ Diário
+   ${this.formatCurrency(projecaoDiario)}
+
+🔻 Saída Total
+   ${this.formatCurrency(projecaoSaidaTotal)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+${isPositive ? '📈' : '📉'} Performance Prevista
+   ${this.formatCurrency(projecaoPerformance)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+${isPositive 
+  ? `✅ ÓTIMA NOTÍCIA!
+
+Mantendo esse ritmo, você
+fecha o mês com saldo
+POSITIVO! 🎉`
+  : `⚠️ ATENÇÃO!
+
+Mantendo esse ritmo, o mês
+fecha NEGATIVO em
+${this.formatCurrency(Math.abs(projecaoPerformance))}
+
+💡 Reduza gastos para
+   equilibrar as contas!`}
     `.trim();
   }
 }

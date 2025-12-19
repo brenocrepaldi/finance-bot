@@ -71,7 +71,13 @@ export class MessageHandler {
 
     } catch (error) {
       console.error('Erro ao processar mensagem:', error);
-      return `❌ Erro ao processar sua mensagem: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
+      return `⚠️ Ops! Algo deu errado.
+
+Não consegui processar sua
+mensagem.
+
+💡 Digite "ajuda" para ver
+   os comandos disponíveis.`;
     }
   }
 
@@ -88,11 +94,15 @@ export class MessageHandler {
         case 'mes':
           return await this.sheetUpdater.getCompleteMonthReport();
         default:
-          return '❌ Comando de consulta inválido.';
+          return '⚠️ Comando não reconhecido.';
       }
     } catch (error) {
       console.error('Erro ao processar consulta:', error);
-      return `❌ Erro ao buscar dados: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
+      return `⚠️ Erro ao buscar dados.
+
+Tente novamente em alguns
+instantes ou digite "ajuda"
+para ver os comandos.`;
     }
   }
 
@@ -101,49 +111,49 @@ export class MessageHandler {
    */
   private getHelpMessage(): string {
     return `
-🤖 *Bot de Controle Financeiro*
+--- 💰 CONTROLE FINANCEIRO ---
 
-📝 *ADICIONAR VALORES (soma ao existente):*
+------ 📝 REGISTRAR VALORES ------
 
-• diario 87,10
-• entrada 200 hoje
-• saida 94,90 amanha
-• 517 (adiciona no diário de hoje)
+🔹 ADICIONAR (soma ao existente)
+   • diario 87,10
+   • entrada 200 hoje
+   • saida 94,90 amanha
+   • 517 (diário de hoje)
 
-━━━━━━━━━━━━━━━━━━━━━━━━
+🔸 SUBSTITUIR (sobrescreve)
+   • sub 300 hoje
+   • sub entrada 500
+   • sub saida 100 16/12
 
-🔄 *SUBSTITUIR VALORES:*
 
-• *sub 300 hoje*
-• *sub entrada 500*
-• *sub saida 100 16/12*
+------ 📊 CONSULTAS ------
 
-━━━━━━━━━━━━━━━━━━━━━━━━
+🔍 Resumos Rápidos:
+   • saldo → Hoje
+   • saldo 16/12 → Data específica
+   • saldo semana → Últimos 7 dias
+   • mes → Mês completo + Performance
 
-📊 *CONSULTAS RÁPIDAS:*
+📈 Análises Avançadas:
+   • performance → Entradas vs Saídas
+   • comparar → Mês atual vs anterior
+   • previsao → Projeção de fim de mês
 
-• *saldo* ou *resumo* → Hoje
-• *saldo 16/12* → Saldo de data específica
-• *saldo semana* → Últimos 7 dias
-• *saldo mes* ou *mes* → Mês completo com Performance
 
-━━━━━━━━━━━━━━━━━━━━━━━━
+------ 📅 FORMATO DATAS ------
 
-📈 *ANÁLISES AVANÇADAS:*
+   ✓ hoje
+   ✓ amanha
+   ✓ 25/12
+   ✓ 25/12/2024
 
-• *performance* → Performance do mês (Entradas vs Saídas)
-• *comparar* → Mês atual vs mês anterior
-• *previsao* → Projeção de fim de mês
 
-━━━━━━━━━━━━━━━━━━━━━━━━
+------ 💡 DICAS ------
 
-📅 *Datas aceitas:*
-• hoje • amanha • dd/mm • dd/mm/aaaa
-
-💡 *Dicas:*
-- Sem "sub", valores SÃO SOMADOS
-- Com "sub", valor É SUBSTITUÍDO
-- Use "mes" para ver Performance completa!
+   ⚡ Sem "sub" → SOMA valores
+   ⚡ Com "sub" → SUBSTITUI valores
+   ⚡ Use "mes" para relatório completo!
     `.trim();
   }
 
